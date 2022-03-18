@@ -10,6 +10,7 @@
 		body {
 			font-family: "Helvetica Neue", "Helvetica", "Arial", "sans-serif";
 			margin: 5px;
+			background-color: #fdd9d9;
 		}
 
 		h1 {
@@ -113,8 +114,8 @@
 		<div class="control-section">
 			<h1>Viewport</h1>
 			<div>
-				<label class="control">Width: <input id="canvas_width" type="number" value="300" size="4"></label>
-				<label class="control">Height: <input id="canvas_height" type="number" value="300" size="4"></label>
+				<label class="control">Width: <input id="canvas_width" type="number" value="800" size="4"></label>
+				<label class="control">Height: <input id="canvas_height" type="number" value="800" size="4"></label>
 			</div>
 			<div>
 				<label class="control">FOV: <input id="fov" type="number" value="70" step="1" min="1" max="179" size="2"></label>
@@ -148,7 +149,7 @@
 			<div class="control">
 				<label><input type="checkbox" id="control_rotate" checked> Enable Rotate</label>
 				<label><input type="checkbox" id="control_zoom" checked> Enable Zoom</label>
-				<label><input type="checkbox" id="control_pan"> Enable Pan</label>
+				<label><input type="checkbox" id="control_pan" checked> Enable Pan</label>
 			</div>
 		</div>
 
@@ -200,14 +201,10 @@
 			<h1>Skin</h1>
 			<div>
 				<div class="control">
-					<label>URL: <input id="skin_url" type="text" value="img/hatsune_miku.png" placeholder="none" list="default_skins" size="20"></label>
+					<label>URL: <input id="skin_url" type="text" value="img/42d486cc4d39a263.png" placeholder="none"
+									   list="default_skins" size="20"></label>
 					<datalist id="default_skins">
-						<option value="img/1_8_texturemap_redux.png">
-						<option value="img/hacksore.png">
-						<option value="img/haka.png">
-						<option value="img/hatsune_miku.png">
-						<option value="img/ironman_hd.png">
-						<option value="img/sethbling.png">
+						<option value="img/42d486cc4d39a263.png">
 					</datalist>
 					<input id="skin_url_upload" type="file" class="hidden" accept="image/*">
 					<button id="skin_url_unset" type="button" class="control hidden">Unset</button>
@@ -229,12 +226,11 @@
 		<div class="control-section">
 			<h1>Cape</h1>
 			<div class="control">
-				<label>URL: <input id="cape_url" type="text" value="img/mojang_cape.png" placeholder="none" list="default_capes" size="20"></label>
+				<label>URL: <input id="cape_url" type="text" value="img/wowkster.png" placeholder="none"
+								   list="default_capes" size="20"></label>
 				<datalist id="default_capes">
 					<option value="">
-					<option value="img/mojang_cape.png">
-					<option value="img/legacy_cape.png">
-					<option value="img/hd_cape.png">
+					<option value="img/wowkster.png">
 				</datalist>
 				<input id="cape_url_upload" type="file" class="hidden" accept="image/*">
 				<button id="cape_url_unset" type="button" class="control hidden">Unset</button>
@@ -244,17 +240,19 @@
 		</div>
 
 		<div class="control-section">
-			<h1>Panorama</h1>
+			<h1>Cosemtic</h1>
 			<div class="control">
-				<label>URL: <input id="panorama_url" type="text" value="img/panorama.png" placeholder="none" list="default_panorama" size="20"></label>
-				<datalist id="default_panorama">
+				<label>URL: <input id="cosmetic_url" type="text" value="img/cosmetic.png" placeholder="none"
+								   list="default_cosmetic" size="20"></label>
+				<datalist id="default_cosmetic">
 					<option value="">
-					<option value="img/panorama.png">
+					<option value="img/cosmetic.png">
 				</datalist>
-				<input id="panorama_url_upload" type="file" class="hidden" accept="image/*">
-				<button id="panorama_url_unset" type="button" class="control hidden">Unset</button>
+				<input id="cosmetic_url_upload" type="file" class="hidden" accept="image/*">
+				<button id="cosmetic_url_unset" type="button" class="control hidden">Unset</button>
 				<button type="button" class="control"
-					onclick="document.getElementById('panorama_url_upload').click();">Browse...</button>
+						onclick="document.getElementById('cosmetic_url_upload').click();">Browse...
+				</button>
 			</div>
 		</div>
 
@@ -266,19 +264,6 @@
 		</div>
 
 	</div>
-
-	<footer>
-		<div>
-			GitHub: <a href="https://github.com/bs-community/skinview3d">bs-community/skinview3d</a>
-		</div>
-		<!--%%deploy_only%%
-			<div>
-				Built from
-				commit <a href="https://github.com/bs-community/skinview3d/commit/{{build_commit}}">{{build_commit}}</a>
-				at <time datetime="{{build_time}}">{{build_time}}</time>
-			</div>
-		-->
-	</footer>
 
 	<script src="../bundles/skinview3d.bundle.js"></script>
 	<script>
@@ -338,7 +323,7 @@
 				input.setCustomValidity("");
 			} else {
 				const selectedBackEquipment = document.querySelector('input[type="radio"][name="back_equipment"]:checked');
-				skinViewer.loadCape(url, { backEquipment: selectedBackEquipment.value })
+				skinViewer.loadCape(url, {backEquipment: selectedBackEquipment.value})
 					.then(() => input.setCustomValidity(""))
 					.catch(e => {
 						input.setCustomValidity("Image can't be loaded.");
@@ -347,14 +332,16 @@
 			}
 		}
 
-		function reloadPanorama() {
-			const input = document.getElementById("panorama_url");
-			const url = obtainTextureUrl("panorama_url");
+
+		function reloadCosmetic() {
+			const input = document.getElementById("cosmetic_url");
+			const url = obtainTextureUrl("cosmetic_url");
+			console.log(url)
 			if (url === "") {
-				skinViewer.background = "white";
+				skinViewer.loadCosmetic(null);
 				input.setCustomValidity("");
 			} else {
-				skinViewer.loadPanorama(url)
+				skinViewer.loadCosmetic(url)
 					.then(() => input.setCustomValidity(""))
 					.catch(e => {
 						input.setCustomValidity("Image can't be loaded.");
@@ -430,12 +417,12 @@
 			};
 			initializeUploadButton("skin_url", reloadSkin);
 			initializeUploadButton("cape_url", reloadCape);
-			initializeUploadButton("panorama_url", reloadPanorama);
+			initializeUploadButton("cosmetic_url", reloadCosmetic);
 
 			document.getElementById("skin_url").addEventListener("change", () => reloadSkin());
 			document.getElementById("skin_model").addEventListener("change", () => reloadSkin());
 			document.getElementById("cape_url").addEventListener("change", () => reloadCape());
-			document.getElementById("panorama_url").addEventListener("change", () => reloadPanorama());
+			document.getElementById("cosmetic_url").addEventListener("change", () => reloadCosmetic());
 
 			for (const el of document.querySelectorAll('input[type="radio"][name="back_equipment"]')) {
 				el.addEventListener("change", e => {
@@ -457,7 +444,9 @@
 
 		function initializeViewer() {
 			skinViewer = new skinview3d.FXAASkinViewer({
-				canvas: document.getElementById("skin_container")
+				canvas: document.getElementById("skin_container"),
+				alpha: true,
+				// background: '#ff00aa'
 			});
 			orbitControl = skinview3d.createOrbitControls(skinViewer);
 			rotateAnimation = null;
@@ -487,7 +476,7 @@
 			}
 			reloadSkin();
 			reloadCape();
-			reloadPanorama();
+			reloadCosmetic();
 		}
 
 		initializeControls();

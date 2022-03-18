@@ -1,7 +1,27 @@
-import { inferModelType, isTextureSource, loadCapeToCanvas, loadImage, loadSkinToCanvas, ModelType, RemoteImage, TextureSource } from "skinview-utils";
-import { Color, ColorRepresentation, EquirectangularReflectionMapping, Group, NearestFilter, PerspectiveCamera, Scene, Texture, Vector2, WebGLRenderer } from "three";
-import { RootAnimation } from "./animation.js";
-import { BackEquipment, PlayerObject } from "./model.js";
+import {
+	inferModelType,
+	isTextureSource,
+	loadCapeToCanvas,
+	loadImage,
+	loadSkinToCanvas,
+	ModelType,
+	RemoteImage,
+	TextureSource,
+} from "skinview-utils";
+import {
+	Color,
+	ColorRepresentation,
+	EquirectangularReflectionMapping,
+	Group,
+	NearestFilter,
+	PerspectiveCamera,
+	Scene,
+	Texture,
+	Vector2,
+	WebGLRenderer,
+} from "three";
+import {RootAnimation} from "./animation.js";
+import {BackEquipment, CfgModel, Cosmetic, PlayerObject} from "./model.js";
 
 export interface LoadOptions {
 	/**
@@ -65,6 +85,11 @@ export interface SkinViewerOptions {
 	fov?: number;
 }
 
+interface CosmeticLoadable {
+	model: CfgModel
+	source: TextureSource | RemoteImage | null
+}
+
 export class SkinViewer {
 	readonly canvas: HTMLCanvasElement;
 	readonly scene: Scene;
@@ -78,6 +103,7 @@ export class SkinViewer {
 	readonly capeCanvas: HTMLCanvasElement;
 	private readonly skinTexture: Texture;
 	private readonly capeTexture: Texture;
+	private cosmeticTextures: Texture[];
 	private backgroundTexture: Texture | null = null;
 
 	private _disposed: boolean = false;
@@ -88,7 +114,18 @@ export class SkinViewer {
 	private onContextRestored: () => void;
 
 	constructor(options: SkinViewerOptions = {}) {
-		this.canvas = options.canvas === undefined ? document.createElement("canvas") : options.canvas;
+		this.canvas =
+			options.canvas === undefined
+				? document.createElement("canvas")
+				: options.canvas;
+
+		window.addEventListener(
+			"contextmenu",
+			function (event) {
+				event.stopImmediatePropagation();
+			},
+			true
+		);
 
 		// texture
 		this.skinCanvas = document.createElement("canvas");
@@ -101,6 +138,8 @@ export class SkinViewer {
 		this.capeTexture.magFilter = NearestFilter;
 		this.capeTexture.minFilter = NearestFilter;
 
+		this.cosmeticTextures = []
+
 		this.scene = new Scene();
 
 		this.camera = new PerspectiveCamera();
@@ -108,13 +147,16 @@ export class SkinViewer {
 
 		this.renderer = new WebGLRenderer({
 			canvas: this.canvas,
-			alpha: options.alpha !== false, // default: true
-			preserveDrawingBuffer: options.preserveDrawingBuffer === true // default: false
-
+			preserveDrawingBuffer: options.preserveDrawingBuffer === true, // default: false
+			antialias: true,
+			alpha: options?.alpha ?? true,
 		});
 		this.renderer.setPixelRatio(window.devicePixelRatio);
 
-		this.playerObject = new PlayerObject(this.skinTexture, this.capeTexture);
+		this.playerObject = new PlayerObject(
+			this.skinTexture,
+			this.capeTexture
+		);
 		this.playerObject.name = "player";
 		this.playerObject.skin.visible = false;
 		this.playerObject.cape.visible = false;
@@ -165,7 +207,11 @@ export class SkinViewer {
 		};
 
 		this.canvas.addEventListener("webglcontextlost", this.onContextLost, false);
-		this.canvas.addEventListener("webglcontextrestored", this.onContextRestored, false);
+		this.canvas.addEventListener(
+			"webglcontextrestored",
+			this.onContextRestored,
+			false
+		);
 	}
 
 	loadSkin(empty: null): void;
@@ -184,14 +230,17 @@ export class SkinViewer {
 			this.resetSkin();
 		} else if (isTextureSource(source)) {
 			loadSkinToCanvas(this.skinCanvas, source);
-			const actualModel = model === "auto-detect" ? inferModelType(this.skinCanvas) : model;
+			const actualModel =
+				model === "auto-detect" ? inferModelType(this.skinCanvas) : model;
 			this.skinTexture.needsUpdate = true;
 			this.playerObject.skin.modelType = actualModel;
 			if (options.makeVisible !== false) {
 				this.playerObject.skin.visible = true;
 			}
 		} else {
-			return loadImage(source).then(image => this.loadSkin(image, model, options));
+			return loadImage(source).then((image) =>
+				this.loadSkin(image, model, options)
+			);
 		}
 	}
 
@@ -215,15 +264,57 @@ export class SkinViewer {
 			loadCapeToCanvas(this.capeCanvas, source);
 			this.capeTexture.needsUpdate = true;
 			if (options.makeVisible !== false) {
-				this.playerObject.backEquipment = options.backEquipment === undefined ? "cape" : options.backEquipment;
+				this.playerObject.backEquipment =
+					options.backEquipment === undefined ? "cape" : options.backEquipment;
 			}
 		} else {
-			return loadImage(source).then(image => this.loadCape(image, options));
+			return loadImage(source).then((image) => this.loadCape(image, options));
 		}
 	}
 
 	resetCape(): void {
 		this.playerObject.backEquipment = null;
+	}
+
+	async loadCosmetics(
+		cosmetics: CosmeticLoadable[] | null
+	): Promise<void> {
+		for (const texture of this.cosmeticTextures) {
+			texture?.dispose()
+		}
+		this.playerObject.clearCosmetics()
+
+		if (!cosmetics) return
+
+		for (const {model, source} of cosmetics) {
+			if (source === null) continue;
+
+			const texSource: TextureSource = isTextureSource(source) ? source : await loadImage(source)
+
+			const canvasElement = document.createElement("canvas");
+			const texture = new Texture(canvasElement);
+			texture.magFilter = NearestFilter;
+			texture.minFilter = NearestFilter;
+			this.cosmeticTextures.push(texture)
+
+			const context = canvasElement.getContext("2d");
+			if (context === null) console.error("Not poggers");
+
+			canvasElement.width = texSource.width;
+			canvasElement.height = texSource.height;
+			context?.clearRect(
+				0,
+				0,
+				canvasElement.width,
+				canvasElement.height
+			);
+			context?.drawImage(texSource, 0, 0, texSource.width, texSource.height);
+
+			texture.needsUpdate = true;
+
+			this.playerObject.addCosmetic(new Cosmetic(model, texture))
+		}
+
 	}
 
 	loadPanorama<S extends TextureSource | RemoteImage>(
@@ -243,7 +334,7 @@ export class SkinViewer {
 			this.backgroundTexture.needsUpdate = true;
 			this.scene.background = this.backgroundTexture;
 		} else {
-			return loadImage(source).then(image => this.loadPanorama(image));
+			return loadImage(source).then((image) => this.loadPanorama(image));
 		}
 	}
 
@@ -254,9 +345,9 @@ export class SkinViewer {
 	}
 
 	/**
-	* Renders the scene to the canvas.
-	* This method does not change the animation progress.
-	*/
+	 * Renders the scene to the canvas.
+	 * This method does not change the animation progress.
+	 */
 	render(): void {
 		this.renderer.render(this.scene, this.camera);
 	}
@@ -270,8 +361,16 @@ export class SkinViewer {
 	dispose(): void {
 		this._disposed = true;
 
-		this.canvas.removeEventListener("webglcontextlost", this.onContextLost, false);
-		this.canvas.removeEventListener("webglcontextrestored", this.onContextRestored, false);
+		this.canvas.removeEventListener(
+			"webglcontextlost",
+			this.onContextLost,
+			false
+		);
+		this.canvas.removeEventListener(
+			"webglcontextrestored",
+			this.onContextRestored,
+			false
+		);
 
 		if (this.animationID !== null) {
 			window.cancelAnimationFrame(this.animationID);
@@ -281,6 +380,8 @@ export class SkinViewer {
 		this.renderer.dispose();
 		this.skinTexture.dispose();
 		this.capeTexture.dispose();
+		this.cosmeticTextures.forEach(t => t.dispose());
+
 		if (this.backgroundTexture !== null) {
 			this.backgroundTexture.dispose();
 			this.backgroundTexture = null;
@@ -306,7 +407,12 @@ export class SkinViewer {
 		if (this._renderPaused && this.animationID !== null) {
 			window.cancelAnimationFrame(this.animationID);
 			this.animationID = null;
-		} else if (!this._renderPaused && !this._disposed && !this.renderer.getContext().isContextLost() && this.animationID == null) {
+		} else if (
+			!this._renderPaused &&
+			!this._disposed &&
+			!this.renderer.getContext().isContextLost() &&
+			this.animationID == null
+		) {
 			this.animationID = window.requestAnimationFrame(() => this.draw());
 		}
 	}
@@ -349,11 +455,13 @@ export class SkinViewer {
 
 	set fov(value: number) {
 		this.camera.fov = value;
-		let distance = 4 + 20 / Math.tan(value / 180 * Math.PI / 2);
+		let distance = 4 + 20 / Math.tan(((value / 180) * Math.PI) / 2);
 		if (distance < 10) {
 			distance = 10;
 		}
-		this.camera.position.multiplyScalar(distance / this.camera.position.length());
+		this.camera.position.multiplyScalar(
+			distance / this.camera.position.length()
+		);
 		this.camera.updateProjectionMatrix();
 	}
 }
