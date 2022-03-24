@@ -542,12 +542,12 @@ export class PlayerObject extends Group {
 
 		this.skin = new SkinObject(skinTexture);
 		this.skin.name = "skin";
-		this.skin.position.y = 8;
+		this.skin.position.y = 0;
 		this.add(this.skin);
 
 		this.cape = new CapeObject(capeTexture);
 		this.cape.name = "cape";
-		this.cape.position.y = 8;
+		this.cape.position.y = 0;
 		this.cape.position.z = -2;
 		this.cape.rotation.x = (10.8 * Math.PI) / 180;
 		this.cape.rotation.y = Math.PI;
@@ -555,14 +555,14 @@ export class PlayerObject extends Group {
 
 		this.elytra = new ElytraObject(capeTexture);
 		this.elytra.name = "elytra";
-		this.elytra.position.y = 8;
+		this.elytra.position.y = 0;
 		this.elytra.position.z = -2;
 		this.elytra.visible = false;
 		this.add(this.elytra);
 
 		this.ears = new EarsObject(earsTexture);
 		this.ears.name = "ears";
-		this.ears.position.y = 10;
+		this.ears.position.y = 2;
 		this.ears.position.z = 2 / 3;
 		this.ears.visible = false;
 		this.skin.head.add(this.ears);

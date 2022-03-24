@@ -1,6 +1,6 @@
 {
   "name": "@wowkster/skinview3d",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "Three.js powered Minecraft skin viewer with added support for rendering Optifine models",
   "main": "libs/skinview3d.js",
   "type": "module",
