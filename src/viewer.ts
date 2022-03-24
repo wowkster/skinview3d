@@ -7,6 +7,7 @@ import {
 	ModelType,
 	RemoteImage,
 	TextureSource,
+	loadEarsToCanvasFromSkin
 } from "skinview-utils";
 import {
 	Color,
@@ -19,15 +20,34 @@ import {
 	Texture,
 	Vector2,
 	WebGLRenderer,
+	AmbientLight,
+	PointLight,
+	Mapping
 } from "three";
-import {RootAnimation} from "./animation.js";
-import {BackEquipment, CfgModel, Cosmetic, PlayerObject} from "./model.js";
+import { CfgModel, Cosmetic} from "./model.js";
+import { RootAnimation } from "./animation.js";
+import { BackEquipment, PlayerObject } from "./model.js";
 
 export interface LoadOptions {
 	/**
 	 * Whether to make the object visible after the texture is loaded. Default is true.
 	 */
 	makeVisible?: boolean;
+}
+
+export interface SkinLoadOptions extends LoadOptions {
+	/**
+	 * The model type of skin. Default is "auto-detect".
+	 */
+	model?: ModelType | "auto-detect";
+
+	/**
+	 * true: Loads the ears drawn on the skin texture, and show it.
+	 * "load-only": Loads the ears drawn on the skin texture, but do not make it visible.
+	 * false: Do not load ears from the skin texture.
+	 * Default is false.
+	 */
+	ears?: boolean | "load-only";
 }
 
 export interface CapeLoadOptions extends LoadOptions {
@@ -38,12 +58,32 @@ export interface CapeLoadOptions extends LoadOptions {
 	backEquipment?: BackEquipment;
 }
 
+export interface EarsLoadOptions extends LoadOptions {
+	/**
+	 * "standalone": The texture is a 14x7 image that only contains the ears;
+	 * "skin": The texture is a skin that contains ears, and we only show its ear part.
+	 * Default is "standalone".
+	 */
+	textureType?: "standalone" | "skin";
+}
+
 export interface SkinViewerOptions {
 	width?: number;
 	height?: number;
 	skin?: RemoteImage | TextureSource;
 	model?: ModelType | "auto-detect";
 	cape?: RemoteImage | TextureSource;
+
+	/**
+	 * If you want to show the ears drawn on the current skin, set this to "current-skin".
+	 * To show ears that come from a separate texture, you have to specify 'textureType' ("standalone" or "skin") and 'source'.
+	 * "standalone" means the provided texture is a 14x7 image that only contains the ears.
+	 * "skin" means the provided texture is a skin that contains ears, and we only show its ear part.
+	 */
+	ears?: "current-skin" | {
+		textureType: "standalone" | "skin",
+		source: RemoteImage | TextureSource
+	}
 
 	/**
 	 * Whether the canvas contains an alpha buffer. Default is true.
@@ -83,6 +123,13 @@ export interface SkinViewerOptions {
 	 * The distance between the object and the camera is automatically computed.
 	 */
 	fov?: number;
+
+	/**
+	 * Zoom ratio of the player. Default is 0.9.
+	 * This value affects the distance between the object and the camera.
+	 * When set to 1.0, the top edge of the player's head coincides with the edge of the view.
+	 */
+	zoom?: number;
 }
 
 interface CosmeticLoadable {
@@ -98,16 +145,21 @@ export class SkinViewer {
 	readonly playerObject: PlayerObject;
 	readonly playerWrapper: Group;
 	readonly animations: RootAnimation = new RootAnimation();
+	readonly globalLight: AmbientLight = new AmbientLight(0xffffff, 0.4);
+	readonly cameraLight: PointLight = new PointLight(0xffffff, 0.6);
 
 	readonly skinCanvas: HTMLCanvasElement;
 	readonly capeCanvas: HTMLCanvasElement;
+	readonly earsCanvas: HTMLCanvasElement;
 	private readonly skinTexture: Texture;
 	private readonly capeTexture: Texture;
+	private readonly earsTexture: Texture;
 	private cosmeticTextures: Texture[];
 	private backgroundTexture: Texture | null = null;
 
 	private _disposed: boolean = false;
 	private _renderPaused: boolean = false;
+	private _zoom: number;
 
 	private animationID: number | null;
 	private onContextLost: (event: Event) => void;
@@ -138,25 +190,29 @@ export class SkinViewer {
 		this.capeTexture.magFilter = NearestFilter;
 		this.capeTexture.minFilter = NearestFilter;
 
+		this.earsCanvas = document.createElement("canvas");
+		this.earsTexture = new Texture(this.earsCanvas);
+		this.earsTexture.magFilter = NearestFilter;
+		this.earsTexture.minFilter = NearestFilter;
+
 		this.cosmeticTextures = []
 
 		this.scene = new Scene();
 
 		this.camera = new PerspectiveCamera();
-		this.camera.position.z = 60;
+		this.camera.add(this.cameraLight);
+		this.scene.add(this.camera);
+		this.scene.add(this.globalLight);
 
 		this.renderer = new WebGLRenderer({
 			canvas: this.canvas,
+			alpha: options.alpha !== false, // default: true
 			preserveDrawingBuffer: options.preserveDrawingBuffer === true, // default: false
 			antialias: true,
-			alpha: options?.alpha ?? true,
 		});
 		this.renderer.setPixelRatio(window.devicePixelRatio);
 
-		this.playerObject = new PlayerObject(
-			this.skinTexture,
-			this.capeTexture
-		);
+		this.playerObject = new PlayerObject(this.skinTexture, this.capeTexture, this.earsTexture);
 		this.playerObject.name = "player";
 		this.playerObject.skin.visible = false;
 		this.playerObject.cape.visible = false;
@@ -166,10 +222,18 @@ export class SkinViewer {
 		this.scene.add(this.playerWrapper);
 
 		if (options.skin !== undefined) {
-			this.loadSkin(options.skin, options.model);
+			this.loadSkin(options.skin, {
+				model: options.model,
+				ears: options.ears === "current-skin"
+			});
 		}
 		if (options.cape !== undefined) {
 			this.loadCape(options.cape);
+		}
+		if (options.ears !== undefined && options.ears !== "current-skin") {
+			this.loadEars(options.ears.source, {
+				textureType: options.ears.textureType
+			});
 		}
 		if (options.width !== undefined) {
 			this.width = options.width;
@@ -183,6 +247,8 @@ export class SkinViewer {
 		if (options.panorama !== undefined) {
 			this.loadPanorama(options.panorama);
 		}
+		this.camera.position.z = 1;
+		this._zoom = options.zoom === undefined ? 0.9 : options.zoom;
 		this.fov = options.fov === undefined ? 50 : options.fov;
 
 		if (options.renderPaused === true) {
@@ -217,29 +283,42 @@ export class SkinViewer {
 	loadSkin(empty: null): void;
 	loadSkin<S extends TextureSource | RemoteImage>(
 		source: S,
-		model?: ModelType | "auto-detect",
-		options?: LoadOptions
+		options?: SkinLoadOptions
 	): S extends TextureSource ? void : Promise<void>;
 
 	loadSkin(
 		source: TextureSource | RemoteImage | null,
-		model: ModelType | "auto-detect" = "auto-detect",
-		options: LoadOptions = {}
+		options: SkinLoadOptions = {}
 	): void | Promise<void> {
 		if (source === null) {
 			this.resetSkin();
+
 		} else if (isTextureSource(source)) {
 			loadSkinToCanvas(this.skinCanvas, source);
-			const actualModel =
-				model === "auto-detect" ? inferModelType(this.skinCanvas) : model;
+			const actualModel = options.model === "auto-detect" ? inferModelType(this.skinCanvas) : options.model;
 			this.skinTexture.needsUpdate = true;
-			this.playerObject.skin.modelType = actualModel;
+
+			if (options.model === undefined || options.model === "auto-detect") {
+				this.playerObject.skin.modelType = inferModelType(this.skinCanvas);
+			} else {
+				this.playerObject.skin.modelType = options.model;
+			}
+
 			if (options.makeVisible !== false) {
 				this.playerObject.skin.visible = true;
 			}
+
+			if (options.ears === true || options.ears == "load-only") {
+				loadEarsToCanvasFromSkin(this.earsCanvas, source);
+				this.earsTexture.needsUpdate = true;
+				if (options.ears === true) {
+					this.playerObject.ears.visible = true;
+				}
+			}
+
 		} else {
 			return loadImage(source).then((image) =>
-				this.loadSkin(image, model, options)
+				this.loadSkin(image, options)
 			);
 		}
 	}
@@ -260,13 +339,16 @@ export class SkinViewer {
 	): void | Promise<void> {
 		if (source === null) {
 			this.resetCape();
+
 		} else if (isTextureSource(source)) {
 			loadCapeToCanvas(this.capeCanvas, source);
 			this.capeTexture.needsUpdate = true;
+
 			if (options.makeVisible !== false) {
 				this.playerObject.backEquipment =
 					options.backEquipment === undefined ? "cape" : options.backEquipment;
 			}
+
 		} else {
 			return loadImage(source).then((image) => this.loadCape(image, options));
 		}
@@ -274,6 +356,40 @@ export class SkinViewer {
 
 	resetCape(): void {
 		this.playerObject.backEquipment = null;
+	}
+
+	loadEars(empty: null): void;
+	loadEars<S extends TextureSource | RemoteImage>(
+		source: S,
+		options?: EarsLoadOptions
+	): S extends TextureSource ? void : Promise<void>;
+
+	loadEars(
+		source: TextureSource | RemoteImage | null,
+		options: EarsLoadOptions = {}
+	): void | Promise<void> {
+		if (source === null) {
+			this.resetEars();
+
+		} else if (isTextureSource(source)) {
+			if (options.textureType === "skin") {
+				loadEarsToCanvasFromSkin(this.earsCanvas, source);
+			} else {
+				loadEarsToCanvas(this.earsCanvas, source);
+			}
+			this.earsTexture.needsUpdate = true;
+
+			if (options.makeVisible !== false) {
+				this.playerObject.ears.visible = true;
+			}
+
+		} else {
+			return loadImage(source).then(image => this.loadEars(image, options));
+		}
+	}
+
+	resetEars(): void {
+		this.playerObject.ears.visible = false;
 	}
 
 	async loadCosmetics(
@@ -319,10 +435,18 @@ export class SkinViewer {
 
 	loadPanorama<S extends TextureSource | RemoteImage>(
 		source: S
+	): S extends TextureSource ? void : Promise<void> {
+		return this.loadBackground(source, EquirectangularReflectionMapping);
+	}
+
+	loadBackground<S extends TextureSource | RemoteImage>(
+		source: S,
+		mapping?: Mapping
 	): S extends TextureSource ? void : Promise<void>;
 
-	loadPanorama<S extends TextureSource | RemoteImage>(
-		source: S
+	loadBackground<S extends TextureSource | RemoteImage>(
+		source: S,
+		mapping?: Mapping
 	): void | Promise<void> {
 		if (isTextureSource(source)) {
 			if (this.backgroundTexture !== null) {
@@ -330,7 +454,9 @@ export class SkinViewer {
 			}
 			this.backgroundTexture = new Texture();
 			this.backgroundTexture.image = source;
-			this.backgroundTexture.mapping = EquirectangularReflectionMapping;
+			if (mapping !== undefined) {
+				this.backgroundTexture.mapping = mapping;
+			}
 			this.backgroundTexture.needsUpdate = true;
 			this.scene.background = this.backgroundTexture;
 		} else {
@@ -380,8 +506,6 @@ export class SkinViewer {
 		this.renderer.dispose();
 		this.skinTexture.dispose();
 		this.capeTexture.dispose();
-		this.cosmeticTextures.forEach(t => t.dispose());
-
 		if (this.backgroundTexture !== null) {
 			this.backgroundTexture.dispose();
 			this.backgroundTexture = null;
@@ -449,19 +573,35 @@ export class SkinViewer {
 		}
 	}
 
+	adjustCameraDistance(): void {
+		let distance = 4.5 + 16.5 / Math.tan(this.fov / 180 * Math.PI / 2) / this.zoom;
+
+		// limit distance between 10 ~ 256 (default min / max distance of OrbitControls)
+		if (distance < 10) {
+			distance = 10;
+		} else if (distance > 256) {
+			distance = 256;
+		}
+
+		this.camera.position.multiplyScalar(distance / this.camera.position.length());
+		this.camera.updateProjectionMatrix();
+	}
+
 	get fov(): number {
 		return this.camera.fov;
 	}
 
 	set fov(value: number) {
 		this.camera.fov = value;
-		let distance = 4 + 20 / Math.tan(((value / 180) * Math.PI) / 2);
-		if (distance < 10) {
-			distance = 10;
-		}
-		this.camera.position.multiplyScalar(
-			distance / this.camera.position.length()
-		);
-		this.camera.updateProjectionMatrix();
+		this.adjustCameraDistance();
+	}
+
+	get zoom(): number {
+		return this._zoom;
+	}
+
+	set zoom(value: number) {
+		this._zoom = value;
+		this.adjustCameraDistance();
 	}
 }
