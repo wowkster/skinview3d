@@ -290,10 +290,28 @@
 				<input id="panorama_url_upload" type="file" class="hidden" accept="image/*">
 				<button id="panorama_url_unset" type="button" class="control hidden">Unset</button>
 				<button type="button" class="control"
-					onclick="document.getElementById('panorama_url_upload').click();">Browse...</button>
+						onclick="document.getElementById('panorama_url_upload').click();">Browse...
+				</button>
 			</div>
 		</div>
 
+
+		<div class="control-section">
+			<h1>Cosmetic</h1>
+			<div class="control">
+				<label>URL: <input id="cosmetic_url" type="text" value="img/cosmetic.png" placeholder="none"
+								   list="default_cosmetic" size="20"></label>
+				<datalist id="default_cosmetic">
+					<option value="">
+					<option value="img/cosmetic.png">
+				</datalist>
+				<input id="cosmetic_url_upload" type="file" class="hidden" accept="image/*">
+				<button id="cosmetic_url_unset" type="button" class="control hidden">Unset</button>
+				<button type="button" class="control"
+						onclick="document.getElementById('cosmetic_url_upload').click();">Browse...
+				</button>
+			</div>
+		</div>
 		<div class="control-section">
 			<h1>Other examples</h1>
 			<ul>
@@ -501,6 +519,7 @@
 			initializeUploadButton("cape_url", reloadCape);
 			initializeUploadButton("ears_url", reloadEars);
 			initializeUploadButton("panorama_url", reloadPanorama);
+			initializeUploadButton("cosmetic_url", reloadCosmetic);
 
 			document.getElementById("skin_url").addEventListener("change", () => reloadSkin());
 			document.getElementById("skin_model").addEventListener("change", () => reloadSkin());
@@ -525,6 +544,24 @@
 				orbitControl.dispose();
 				initializeViewer();
 			});
+		}
+
+		function reloadCosmetic() {
+			const input = document.getElementById("cosmetic_url");
+			const url = obtainTextureUrl("cosmetic_url");
+			if (url === "") {
+				skinViewer.clearCosmetics();
+				input.setCustomValidity("");
+			} else {
+				skinViewer.loadCosmetics([{
+					model: skinview3d.EXAMPLE_MODEL,
+					source: url
+				}]).then(() => input.setCustomValidity(""))
+					.catch(e => {
+						input.setCustomValidity("Image can't be loaded.");
+						console.error(e);
+					});
+			}
 		}
 
 		function initializeViewer() {

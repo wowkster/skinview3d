@@ -120,6 +120,8 @@ export class BodyPart extends Group {
 		outerLayer.name = "outer";
 
 		this.cosmetics = new Object3D()
+		this.cosmetics.name = "cosmetics"
+		this.add(this.cosmetics)
 	}
 }
 
@@ -440,13 +442,15 @@ export class Cosmetic {
 	readonly leftLeg: Group = new Group();
 
 	constructor(cfgModel: CfgModel, texture: Texture) {
-		const cosmeticMaterial = new MeshBasicMaterial({
+		console.debug(cfgModel, texture)
+		const cosmeticMaterial = new MeshStandardMaterial({
 			map: texture,
 			side: DoubleSide,
 			transparent: true,
 			alphaTest: 1e-5,
 		});
 
+		console.debug(cfgModel.textureSize)
 		const [textureWidth, textureHeight] = cfgModel.textureSize;
 
 		const toFaceVertices = (x1: number, y1: number, x2: number, y2: number) => [
@@ -466,7 +470,6 @@ export class Cosmetic {
 
 				const {uvEast, uvWest, uvUp, uvDown, uvNorth, uvSouth} = box;
 				const uvs = [uvEast, uvWest, uvUp, uvDown, uvNorth, uvSouth];
-				console.log(uvs)
 
 				const vectors = [];
 
@@ -486,7 +489,6 @@ export class Cosmetic {
 				uvAttr.needsUpdate = true;
 
 				const boxMesh = new Mesh(boxModel, cosmeticMaterial);
-				console.log(boxMesh)
 
 				boxMesh.position.x = box.coordinates[0] + box.coordinates[3] / 2 - model.translate[0] + 0.25;
 				boxMesh.position.y = box.coordinates[1] + box.coordinates[4] / 2 - model.translate[1];

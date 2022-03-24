@@ -2,31 +2,31 @@ import {
 	inferModelType,
 	isTextureSource,
 	loadCapeToCanvas,
+	loadEarsToCanvas,
+	loadEarsToCanvasFromSkin,
 	loadImage,
 	loadSkinToCanvas,
 	ModelType,
 	RemoteImage,
-	TextureSource,
-	loadEarsToCanvasFromSkin
+	TextureSource
 } from "skinview-utils";
 import {
+	AmbientLight,
 	Color,
 	ColorRepresentation,
 	EquirectangularReflectionMapping,
 	Group,
+	Mapping,
 	NearestFilter,
 	PerspectiveCamera,
+	PointLight,
 	Scene,
 	Texture,
 	Vector2,
-	WebGLRenderer,
-	AmbientLight,
-	PointLight,
-	Mapping
+	WebGLRenderer
 } from "three";
-import { CfgModel, Cosmetic} from "./model.js";
-import { RootAnimation } from "./animation.js";
-import { BackEquipment, PlayerObject } from "./model.js";
+import {BackEquipment, CfgModel, Cosmetic, PlayerObject} from "./model.js";
+import {RootAnimation} from "./animation.js";
 
 export interface LoadOptions {
 	/**
